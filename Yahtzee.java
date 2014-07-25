@@ -9,6 +9,8 @@ import acm.program.*;
 import acm.util.*;
 
 public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
+	private int[] PlayerScores;
+	
 	public void run() {
 		setupPlayers();
 		initDisplay();
@@ -24,6 +26,11 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 		
 		/* Set up the players array by reading names for each player. */
 		playerNames = new String[nPlayers];
+		PlayerScores = new int[nPlayers];
+		for (int i = 0; i < nPlayers; i++) {
+			PlayerScores[i] = 0;
+		}
+
 		for (int i = 0; i < nPlayers; i++) {
 			/* IODialog is a class that allows us to prompt the user for information as a
 			 * series of dialog boxes.  We will use this here to read player names.
@@ -70,11 +77,11 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 		IODialog StartGame = getDialog();
 		StartGame.println("Let's Play");
 		for(int Round = 0; Round < 13; Round++) {
-			play1Round(playerNames);
+			play1Round(playerNames, PlayerScores);
 		}
 		StartGame.println("The game has ended");
 	}
-	private void play1Round(String[] Players) {
+	private void play1Round(String[] Players, int[] PlayerScores) {
 		for(int PlayerTurn = 0; PlayerTurn < Players.length; PlayerTurn++) {
 			int[] DiceValues = new int[N_DICE];
 			RandomGenerator DiceRoller = RandomGenerator.getInstance();
@@ -91,7 +98,9 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 			}
 			int Category = display.waitForPlayerToSelectCategory();
 			int Score = categoryScore(DiceValues, Category);
+			PlayerScores[PlayerTurn] += Score;
 			display.updateScorecard(Category, PlayerTurn, Score);
+			display.updateScorecard(16, PlayerTurn, PlayerScores[PlayerTurn]);
 		}
 	}
 	private int categoryScore(int[] Dice, int Category) {
@@ -144,10 +153,6 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 					}
 				}
 				return score;
-				
-			case 6:
-				
-			case 7:
 				
 			case 8:
 				if(threeOfAKindElegibility(Dice)) {

@@ -16,7 +16,11 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 	/**EachPlayers lower score */
 	private int[] PlayerLowerScore;
 	
-	public void run() {
+	public static void main(String[] args) {
+		new Yahtzee().start(args);
+	}
+	
+	public void run() {	
 		setupPlayers();
 		initDisplay();
 		playGame();
@@ -32,24 +36,26 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 		/* Set up the players array by reading names for each player. */
 		PlayerNames = new String[NPlayers];
 		PlayerScores = new int[NPlayers];
-		for (int i = 0; i < NPlayers; i++) {
-			PlayerScores[i] = 0;
-		}
 		PlayerUpperScore = new int[NPlayers];
-		for (int i = 0; i < NPlayers; i++) {
-			PlayerUpperScore[i] = 0;
-		}
 		PlayerLowerScore = new int[NPlayers];
-		for (int i = 0; i < NPlayers; i++) {
-			PlayerLowerScore[i] = 0;
-		}
 
 		for (int i = 0; i < NPlayers; i++) {
 			/* IODialog is a class that allows us to prompt the user for information as a
 			 * series of dialog boxes.  We will use this here to read player names.
 			 */
+			PlayerNames[i] = choosePlayerName(i + 1);
+		}
+	}
+	
+	private String choosePlayerName(int Player) {
+		while(true) {
 			IODialog dialog = getDialog();
-			PlayerNames[i] = dialog.readLine("Enter name for player " + (i + 1));
+			String Name = dialog.readLine("Enter name for player " + Player);
+			if(Name.length() > 0) {
+				return Name;
+			}	else {
+				dialog.println("That is not a valid name");
+			}
 		}
 	}
 	
@@ -90,10 +96,17 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 		IODialog StartGame = getDialog();
 		StartGame.println("Let's Play");
 		for(int Round = 0; Round < 13; Round++) {
-			play1Round(PlayerNames, PlayerScores);
+			play1Round(PlayerNames);
 		}
+		giveUpperBonus();
 		StartGame.print(winnerWinner());
 		StartGame.println("The game has ended");
+	}
+	
+	private void rollDiceOnce(int[] DiceValues, RandomGenerator DiceRoll) {
+		for(int Die = 0; Die < N_DICE; Die++) {
+			DiceValues[Die] = DiceRoll.nextInt(1, 6);
+		}
 	}
 	
 	/**
@@ -101,41 +114,48 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 	 * @param Players Names of the player participating.
 	 * @param PlayerScores Scores of the participants.
 	 */
-	private void play1Round(String[] Players, int[] PlayerScores) {
+	private void play1Round(String[] Players) {
 		for(int PlayerTurn = 0; PlayerTurn < Players.length; PlayerTurn++) {
 			int[] DiceValues = new int[N_DICE];
 			RandomGenerator DiceRoller = RandomGenerator.getInstance();
-			for(int Die = 0; Die < N_DICE; Die++) {
-				DiceValues[Die] = DiceRoller.nextInt(1, 6);
-			}
+			rollDiceOnce(DiceValues, DiceRoller);
+			
 			IODialog YourTurn = getDialog();
 			YourTurn.println(Players[PlayerTurn] + "'s turn.");
+			
 			Display.waitForPlayerToClickRoll(PlayerTurn);
-			try {
-				Display.displayDice(DiceValues);
-			} catch(ErrorException ex) {
-				
-			}
-			for(int i = 0; i < 2; i++) {
+			Display.displayDice(DiceValues);
+			int RerollTimes = 2;
+			for(int i = 0; i < RerollTimes; i++) {
 				Display.waitForPlayerToSelectDice();
 				redrawDice(DiceValues, DiceRoller);
 			}
-			int Category = Display.waitForPlayerToSelectCategory();
-			int Score = categoryScore(DiceValues, Category);
-			PlayerScores[PlayerTurn] += Score;
-			Display.updateScorecard(Category, PlayerTurn, Score);
-			if(Category < 6) {
-				PlayerUpperScore[PlayerTurn] += Score;
-			}	else if(Category > 7) {
-				PlayerLowerScore[PlayerTurn] += Score;
-			}
+			updateScore(PlayerTurn, DiceValues);
+		}
+	}
+	
+	private void giveUpperBonus() {
+		for(int PlayerTurn = 0; PlayerTurn < PlayerNames.length; PlayerTurn++) {
 			if(PlayerUpperScore[PlayerTurn] >= 63) {
 				Display.updateScorecard(7, PlayerTurn, 35);
 				PlayerScores[PlayerTurn] += 35;
 			}
-			Display.updateScorecard(16, PlayerTurn, PlayerScores[PlayerTurn]);
 		}
 	}
+	
+	private void updateScore(int PlayerTurn, int[] DiceValues) {
+		int Category = Display.waitForPlayerToSelectCategory();
+		int Score = categoryScore(DiceValues, Category);
+		PlayerScores[PlayerTurn] += Score;
+		Display.updateScorecard(Category, PlayerTurn, Score);
+		if(Category < 6) {
+			PlayerUpperScore[PlayerTurn] += Score;
+		}	else if(Category > 7) {
+			PlayerLowerScore[PlayerTurn] += Score;
+		}
+		Display.updateScorecard(16, PlayerTurn, PlayerScores[PlayerTurn]);
+	}
+	
 	/**
 	 * Gets the person who wins the game.
 	 * @return The name of the winner in string form.
@@ -166,6 +186,7 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 			}
 		}
 	}
+	
 	/**
 	 * Gets the Selected Die.
 	 * @return A boolean[] of which die are selected.
@@ -178,6 +199,17 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 		return SelectedDie;
 	}
 	
+	private int UpperScoreCalculator(int Category, int[] Dice) {
+		int score = 0;
+		int DieNumber = Category + 1;
+		for(int Die = 0; Die < N_DICE; Die++) {
+			if(Dice[Die] == DieNumber) {
+				score += DieNumber;
+			}
+		}
+		return score;
+	}
+	
 	/**
 	 * Gets the score that would be displayed for the category the user chose.
 	 * @author Maxwell
@@ -187,55 +219,11 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 	 */
 	private int categoryScore(int[] Dice, int Category) {
 		int score = 0;
+		if(Category < 6) {
+			score = UpperScoreCalculator(Category, Dice);
+			return score;
+		}
 		switch(Category) {
-			case 0: 
-				for(int Die = 0; Die < N_DICE; Die++) {
-					if(Dice[Die] == 1) {
-						score++;
-					}
-				}
-				return score;
-				
-			case 1:
-				for(int Die = 0; Die < N_DICE; Die++) {
-					if(Dice[Die] == 2) {
-						score += 2;
-					}
-				}
-				return score;
-
-			case 2:
-				for(int Die = 0; Die < N_DICE; Die++) {
-					if(Dice[Die] == 3) {
-						score += 3;
-					}
-				}
-				return score;
-				
-			case 3:
-				for(int Die = 0; Die < N_DICE; Die++) {
-					if(Dice[Die] == 4) {
-						score += 4;
-					}
-				}
-				return score;
-				
-			case 4:
-				for(int Die = 0; Die < N_DICE; Die++) {
-					if(Dice[Die] == 5) {
-						score += 5;
-					}
-				}
-				return score;
-				
-			case 5:
-				for(int Die = 0; Die < N_DICE; Die++) {
-					if(Dice[Die] == 6) {
-						score += 6;
-					}
-				}
-				return score;
-				
 			case 8:
 				if(threeOfAKindElegibility(Dice)) {
 					score = addAllDice(Dice);
@@ -269,15 +257,9 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 			case 14:
 				score = addAllDice(Dice);
 				return score;
-			case 15:
-				break;
-			case 16:
-				
-				break;
 			default: 
 				return score;
 		}
-		return score;
 	}
 	
 	/**
@@ -341,7 +323,7 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 			}
 				
 		}
-		if((ContainsTwo && ContainsThree && ContainsFour && ContainsFive) && (ContainsOne || ContainsSix)) {
+		if((ContainsThree && ContainsFour) && ((ContainsOne && ContainsTwo) || (ContainsTwo && ContainsFive) || (ContainsFive && ContainsSix))) {
 			return true;
 		}
 		return false;
@@ -353,13 +335,40 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 	 * @return A true or false depending on if you are eligible or not.
 	 */
 	private boolean largeStraightElegibility(int[] CurrentDice) {
-		for(int DiceTooCheck = 0; DiceTooCheck < 4; DiceTooCheck++) {
-			int AmmountDiceEqual = howManyEqual(CurrentDice, DiceTooCheck); 
-			if(AmmountDiceEqual >= 2) {
-				return false;
+		boolean ContainsOne = false;
+		boolean ContainsTwo = false;
+		boolean ContainsThree = false;
+		boolean ContainsFour = false;
+		boolean ContainsFive = false;
+		boolean ContainsSix = false;
+		for(int DiceCheck = 0; DiceCheck < 5; DiceCheck++) {
+			switch(CurrentDice[DiceCheck]) {
+				case 1:
+					ContainsOne = true;
+					break;
+				case 2:
+					ContainsTwo = true;
+					break;
+				case 3:
+					ContainsThree = true;
+					break;
+				case 4:
+					ContainsFour = true;
+					break;
+				case 5:
+					ContainsFive = true;
+					break;
+				case 6:
+					ContainsSix = true;
+					break;
+				default: return false;
 			}
+				
 		}
-		return true;
+		if((ContainsTwo && ContainsThree && ContainsFour && ContainsFive) && (ContainsOne || ContainsSix)) {
+			return true;
+		}
+		return false;
 	}
 	
 	/**
@@ -370,11 +379,11 @@ public class Yahtzee extends GraphicsProgram implements YahtzeeConstants {
 	private boolean fullHouseElegibility(int[] CurrentDice) {
 		boolean ThreeEqual = false;
 		boolean TwoEqual = false;
-		for(int DiceTooCheck = 0; DiceTooCheck < 3; DiceTooCheck++) {
+		for(int DiceTooCheck = 0; DiceTooCheck < N_DICE; DiceTooCheck++) {
 			int AmmountDiceEqual = howManyEqual(CurrentDice, DiceTooCheck); 
-			if(AmmountDiceEqual >= 3) {
+			if(AmmountDiceEqual == 3) {
 				ThreeEqual = true;
-			} else if(AmmountDiceEqual >= 2) {
+			} else if(AmmountDiceEqual == 2) {
 				TwoEqual = true;
 			}
 			if(ThreeEqual && TwoEqual) {
